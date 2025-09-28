@@ -1,8 +1,7 @@
 # CDSNet
 ## This is the official code of CDSNet!
 
-[Paper Title Placeholder]  
-[Conference/Journal Placeholder, Year]  
+[Divide and Conquer: A Multi-Task Network with Adaptive Candidate Strategy for Camouflaged Object Detection]  
 
 ---
 
