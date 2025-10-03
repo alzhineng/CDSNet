@@ -17,7 +17,7 @@ from mmengine import Config
 from torch.utils import data
 from tqdm import tqdm
 
-import CDSNet as model_cds
+import ProCoGuid as model_cds
 from utils import io, ops, pipeline, pt_utils, py_utils, recorder
 import torch.nn as nn
 LOGGER = logging.getLogger("main")
@@ -51,14 +51,15 @@ class ImageTestDataset(data.Dataset):
         base_h = self.shape["h"]
         base_w = self.shape["w"]
 
-        images = ops.ms_resize(image, scales=(1.0), base_h=base_h, base_w=base_w)
-        
-        image = torch.from_numpy(images[1]).div(255).permute(2, 0, 1)
+        images = ops.ms_resize(image, scales=(0.5, 1.0, 1.5), base_h=base_h, base_w=base_w)
+        image_s = torch.from_numpy(images[0]).div(255).permute(2, 0, 1)
+        image_m = torch.from_numpy(images[1]).div(255).permute(2, 0, 1)
+        image_l = torch.from_numpy(images[2]).div(255).permute(2, 0, 1)
         image_resize = ops.ms_resize(image, scales=(1.0,), base_h=1024, base_w=1024)
         image_resize = torch.from_numpy(image_resize[0]).div(255).permute(2, 0, 1)
 
         return dict(
-            data={"image": image,"image_resize": image_resize,},
+            data={"image": image_m,"image_resize": image_resize,},
             info=dict(mask_path=mask_path, group_name="image"),
         )
 
@@ -112,8 +113,10 @@ class ImageTrainDataset(data.Dataset):
         base_h = self.shape["h"]
         base_w = self.shape["w"]
 
-        images = ops.ms_resize(image, scales=(1.0), base_h=base_h, base_w=base_w)
-        image = torch.from_numpy(images[1]).div(255).permute(2, 0, 1)
+        images = ops.ms_resize(image, scales=(0.5, 1.0, 1.5), base_h=base_h, base_w=base_w)
+        image_s = torch.from_numpy(images[0]).div(255).permute(2, 0, 1)
+        image_m = torch.from_numpy(images[1]).div(255).permute(2, 0, 1)
+        image_l = torch.from_numpy(images[2]).div(255).permute(2, 0, 1)
 
         mask = ops.resize(mask, height=base_h, width=base_w)
         mask = torch.from_numpy(mask).unsqueeze(0)
@@ -122,7 +125,7 @@ class ImageTrainDataset(data.Dataset):
 
         return dict(
             data={
-                "image": image,
+                "image": image_m,
                 "mask": mask,
                 "image_resize": image_resize,
             },
@@ -163,7 +166,7 @@ class Evaluator:
                     pred = ops.clip_to_normalize(pred, clip_range=self.clip_range)
 
                 group_name = group_names[pred_idx]
-                if save_path:  
+                if save_path:  # 这里的save_path包含了数据集名字
                     ops.save_array_as_image(
                         data_array=pred,
                         save_name=os.path.basename(mask_path),
@@ -245,7 +248,7 @@ def train(model, cfg):
 
     LOGGER.info(f"Image Mean: {model.normalizer.mean.flatten()}, Image Std: {model.normalizer.std.flatten()}")
     if cfg.train.bn.freeze_encoder:
-        LOGGER.info("Freeze Backbone ")
+        LOGGER.info(" >>> Freeze Backbone !!! <<< ")
         model.encoder.requires_grad_(False)
 
     train_start_time = time.perf_counter()
@@ -309,8 +312,10 @@ def train(model, cfg):
             if counter.is_last_total_iter():
                 break
             counter.update_iter_counter()
+
+        # an epoch ends
         recorder.plot_results(
-            dict(img=data_batch["image"], msk=data_batch["mask"], **),
+            dict(img=data_batch["image_m"], msk=data_batch["mask"], **outputs["vis"]),
             save_path=os.path.join(cfg.path.pth_log, "img", f"epoch_{counter.curr_epoch}.png"),
         )
         io.save_weight(model=model, save_path=cfg.path.final_state_net)
@@ -318,6 +323,8 @@ def train(model, cfg):
         # if epoch ==110 or epoch ==120 or epoch ==130 or epoch ==140 or epoch ==149:
         if epoch ==149:
             test(model=model, cfg=cfg)
+        # if epoch >=145:
+        #     test(model=model, cfg=cfg)
     cfg.tb_logger.close_tb()
     io.save_weight(model=model, save_path=cfg.path.final_state_net)
 
@@ -329,11 +336,11 @@ def train(model, cfg):
 
 
 def parse_cfg():
-    parser = argparse.ArgumentParser("")
-    parser.add_argument("--config", default="", type=str)
-    parser.add_argument("--data-cfg", type=str, default="")
-    parser.add_argument("--model-name", type=str, choices=model_cds.__dict__.keys(),default='')
-    parser.add_argument("--output-dir", type=str, default="result")
+    parser = argparse.ArgumentParser("Training and evaluation script")
+    parser.add_argument("--config", default="/home/fy/pythonProject/AUGMENT_ZOOM/configs/icod_train.py", type=str)
+    parser.add_argument("--data-cfg", type=str, default="./dataset.yaml")
+    parser.add_argument("--model-name", type=str, choices=model_cds.__dict__.keys(),default='PvtV2B2_ZoomNeXt')
+    parser.add_argument("--output-dir", type=str, default="outputs")
     parser.add_argument("--load-from", type=str)
     parser.add_argument("--pretrained", default="qwe", action="store_true")
     parser.add_argument(
@@ -391,7 +398,18 @@ def main():
     if cfg.load_from:
         io.load_weight(model=model, load_path=cfg.load_from, strict=True)
 
+    LOGGER.info(f"Number of Parameters: {sum((v.numel() for v in model.parameters(recurse=True)))}")
+    # test(model=model, cfg=cfg)
+    # if not cfg.evaluate:
+        # io.load_weight(model=model,
+        #                load_path="/home/fy/pythonProject/AUGMENT_ZOOM/outputs/PvtV2B2_ZoomNeXt_BS4_LR0.0001_E150_H384_W384_OPMadam_OPGMfinetune_SCstep_AMP/class_2/pth/state_final.pth",
+        #                strict=True)
+        # train(model=model, cfg=cfg)
 
+
+    if cfg.evaluate or cfg.has_test:
+        io.load_weight(model=model, load_path="/home/fy/pythonProject/AUGMENT_ZOOM/outputs/PvtV2B2_ZoomNeXt_BS4_LR0.0001_E150_H384_W384_OPMadam_OPGMfinetune_SCstep_AMP/exp_53/pth/state_final.pth", strict=True)
+        test(model=model, cfg=cfg)
 
     LOGGER.info("End training...")
 
