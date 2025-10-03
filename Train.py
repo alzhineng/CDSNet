@@ -51,15 +51,13 @@ class ImageTestDataset(data.Dataset):
         base_h = self.shape["h"]
         base_w = self.shape["w"]
 
-        images = ops.ms_resize(image, scales=(0.5, 1.0, 1.5), base_h=base_h, base_w=base_w)
-        image_s = torch.from_numpy(images[0]).div(255).permute(2, 0, 1)
-        image_m = torch.from_numpy(images[1]).div(255).permute(2, 0, 1)
-        image_l = torch.from_numpy(images[2]).div(255).permute(2, 0, 1)
+        images = ops.ms_resize(image, scales=(1.0), base_h=base_h, base_w=base_w)
+        image = torch.from_numpy(images[1]).div(255).permute(2, 0, 1)
         image_resize = ops.ms_resize(image, scales=(1.0,), base_h=1024, base_w=1024)
         image_resize = torch.from_numpy(image_resize[0]).div(255).permute(2, 0, 1)
 
         return dict(
-            data={"image": image_m,"image_resize": image_resize,},
+            data={"image": image,"image_resize": image_resize,},
             info=dict(mask_path=mask_path, group_name="image"),
         )
 
@@ -113,19 +111,18 @@ class ImageTrainDataset(data.Dataset):
         base_h = self.shape["h"]
         base_w = self.shape["w"]
 
-        images = ops.ms_resize(image, scales=(0.5, 1.0, 1.5), base_h=base_h, base_w=base_w)
-        image_s = torch.from_numpy(images[0]).div(255).permute(2, 0, 1)
-        image_m = torch.from_numpy(images[1]).div(255).permute(2, 0, 1)
-        image_l = torch.from_numpy(images[2]).div(255).permute(2, 0, 1)
+        images = ops.ms_resize(image, scales=(1.0), base_h=base_h, base_w=base_w)
+        image = torch.from_numpy(images[1]).div(255).permute(2, 0, 1)
+
 
         mask = ops.resize(mask, height=base_h, width=base_w)
         mask = torch.from_numpy(mask).unsqueeze(0)
-        image_resize = ops.ms_resize(image, scales=(1.0, ), base_h=1024, base_w=1024)
+        image_resize = ops.ms_resize(image, scales=(1.0), base_h=1024, base_w=1024)
         image_resize = torch.from_numpy(image_resize[0]).div(255).permute(2, 0, 1)
 
         return dict(
             data={
-                "image": image_m,
+                "image": image,
                 "mask": mask,
                 "image_resize": image_resize,
             },
@@ -323,8 +320,6 @@ def train(model, cfg):
         # if epoch ==110 or epoch ==120 or epoch ==130 or epoch ==140 or epoch ==149:
         if epoch ==149:
             test(model=model, cfg=cfg)
-        # if epoch >=145:
-        #     test(model=model, cfg=cfg)
     cfg.tb_logger.close_tb()
     io.save_weight(model=model, save_path=cfg.path.final_state_net)
 
@@ -337,12 +332,12 @@ def train(model, cfg):
 
 def parse_cfg():
     parser = argparse.ArgumentParser("Training and evaluation script")
-    parser.add_argument("--config", default="/home/fy/pythonProject/AUGMENT_ZOOM/configs/icod_train.py", type=str)
-    parser.add_argument("--data-cfg", type=str, default="./dataset.yaml")
-    parser.add_argument("--model-name", type=str, choices=model_cds.__dict__.keys(),default='PvtV2B2_ZoomNeXt')
+    parser.add_argument("--config", default="", type=str)
+    parser.add_argument("--data-cfg", type=str, default="")
+    parser.add_argument("--model-name", type=str, choices=model_cds.__dict__.keys(),default='')
     parser.add_argument("--output-dir", type=str, default="outputs")
     parser.add_argument("--load-from", type=str)
-    parser.add_argument("--pretrained", default="qwe", action="store_true")
+    parser.add_argument("--pretrained", default="", action="store_true")
     parser.add_argument(
         "--metric-names",
         nargs="+",
@@ -399,16 +394,8 @@ def main():
         io.load_weight(model=model, load_path=cfg.load_from, strict=True)
 
     LOGGER.info(f"Number of Parameters: {sum((v.numel() for v in model.parameters(recurse=True)))}")
-    # test(model=model, cfg=cfg)
-    # if not cfg.evaluate:
-        # io.load_weight(model=model,
-        #                load_path="/home/fy/pythonProject/AUGMENT_ZOOM/outputs/PvtV2B2_ZoomNeXt_BS4_LR0.0001_E150_H384_W384_OPMadam_OPGMfinetune_SCstep_AMP/class_2/pth/state_final.pth",
-        #                strict=True)
-        # train(model=model, cfg=cfg)
-
-
     if cfg.evaluate or cfg.has_test:
-        io.load_weight(model=model, load_path="/home/fy/pythonProject/AUGMENT_ZOOM/outputs/PvtV2B2_ZoomNeXt_BS4_LR0.0001_E150_H384_W384_OPMadam_OPGMfinetune_SCstep_AMP/exp_53/pth/state_final.pth", strict=True)
+        io.load_weight(model=model, load_path="", strict=True)
         test(model=model, cfg=cfg)
 
     LOGGER.info("End training...")
