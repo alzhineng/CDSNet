@@ -1,12 +1,12 @@
-# CDSNet
-## This is the official code of CDSNet!
+# ProCoGuid
+## This is the official code of ProCoGuid!
 
-[Divide and Conquer: A Multi-Task Network with Adaptive Candidate Strategy for Camouflaged Object Detection]  
+[ProCoGuid: Progressive Collaborative Guidance Network for Camouflaged Object Detection]  
 
 ---
 
 ## Introduction
-This repository contains the official implementation of **CDSNet**, a multi-task framework designed for camouflaged object detection.  
+This repository contains the official implementation of **ProCoGuid**, a multi-task framework designed for camouflaged object detection.  
 The codebase and pretrained models will be available soon. Please stay tuned!
 
 ---
